@@ -20,11 +20,11 @@ The ADK Currency Agent is a sample agent built using the Google Agent Developmen
 
     In case you don't have it yet, create an account in Google Cloud. Activate the Cloud Shell and Cloud Editor.
 
-        *   Once the shell is activated, install uv using "pip install uv". 
-        *   Create a folder called adk-agent. 
-        *   And, inside this folder, create a folder called "currency-agent". Within this folder, run "uv init".
-        *   uv will automatically create a virtual environment called ".venv".
-        *   The virtual environment can be activated using "source .venv/bin/activate".
+    1. Once the shell is activated, install uv using "pip install uv". 
+    2. Create a folder called adk-agent. 
+    3. And, inside this folder, create a folder called "currency-agent". Within this folder, run "uv init".
+    4. uv will automatically create a virtual environment called ".venv".
+    5. The virtual environment can be activated using "source .venv/bin/activate".
 
 2.  **Set up environment variables:**
 
@@ -98,4 +98,4 @@ To deploy the agent to Google Cloud Run, follow these steps:
     ```
 
     This script will deploy the agent to Google Cloud Run, making it accessible over the internet.
-    Once you have completed testing, you may delete the Cloud Run service.
+    Once you have completed testing, you may delete the Cloud Run service using Google Cloud console or CLI.
