@@ -53,6 +53,8 @@ The ADK Currency Agent is a sample agent built using the Google Agent Developmen
 
     Replace the placeholder values with your actual API keys and project details. Give execute permissions to the setenv.sh file and execute "source setenv.sh" to set the environment variables.
 
+    Although the .gitignore is set NOT TO TRACK the setenv.sh file, it may be prudent to keep the setenv.sh file outside the folder.
+
 2.  **Install dependencies:**
 
     Run the following command to install the required Python packages:
