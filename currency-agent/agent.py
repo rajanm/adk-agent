@@ -15,6 +15,22 @@ import os
 import requests
 import pandas as pd
 
+from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
+from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
+from opentelemetry.exporter.cloud_monitoring import CloudMonitoringMetricsExporter
+from traceloop.sdk import Traceloop
+
+trace_exporter = CloudTraceSpanExporter()
+metrics_exporter = CloudMonitoringMetricsExporter()
+logs_exporter = CloudLoggingExporter()
+
+Traceloop.init(
+    app_name='ADK Currency Agent',
+    exporter=trace_exporter,
+    metrics_exporter=metrics_exporter,
+    logging_exporter=logs_exporter,
+    disable_batch=True)
+
 instruction_prompt_ds_v1 = """
   # Guidelines
 
