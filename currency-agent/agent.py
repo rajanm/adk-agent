@@ -315,13 +315,13 @@ def call_web_search(
         Question to answer: {question}
 
     """
-    print("question_with_data:", question_with_data)
+    print("question_with_data:", question)
 
     contents = [
         types.Content(
             role="user",
             parts=[
-            types.Part.from_text(text="""{question}""")
+            types.Part.from_text(text=question_with_data)
             ]
         ),
     ]
