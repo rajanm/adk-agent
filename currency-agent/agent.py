@@ -28,8 +28,7 @@ Traceloop.init(
     app_name='ADK Currency Agent',
     exporter=trace_exporter,
     metrics_exporter=metrics_exporter,
-    logging_exporter=logs_exporter,
-    disable_batch=True)
+    logging_exporter=logs_exporter)
 
 instruction_prompt_ds_v1 = """
   # Guidelines
