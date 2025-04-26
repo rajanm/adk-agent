@@ -369,7 +369,7 @@ root_agent = Agent(
     model=os.getenv("GOOGLE_GEMINI_MODEL"),
     description="Agent to answer questions about the historical and current exchange rates, create and run python code, search the web to get information and time and weather in a city. Today is " + now.strftime("%Y-%m-%d %H:%M:%S"),
     instruction="I can answer your questions about the historical and current currency exchange rates, create and run python code, search the web to get information and time and weather in a city and Today is " + now.strftime("%Y-%m-%d %H:%M:%S") + ". Always format the user response in markdown format.",
-    tools=[get_weather, get_current_time, get_exchange_rate, get_historical_exchange_rate, get_exchange_rate_trend, load_artifacts, call_code_agent, call_web_search]
+    tools=[get_weather, get_current_time, get_exchange_rate, get_historical_exchange_rate, get_exchange_rate_trend, load_artifacts, call_code_agent, call_web_search],
 )
 
 # Instantiate the desired artifact service and session service
