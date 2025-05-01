@@ -14,6 +14,7 @@ import datetime
 import os
 import requests
 import pandas as pd
+import subprocess
 
 from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
@@ -313,12 +314,85 @@ async def call_code_agent(
     tool_context.state["code_agent_output"] = code_agent_output
     return code_agent_output
 
+def call_local_tool(
+    question: str,
+    tool_context: ToolContext,
+):
+
+    """"            
+    Local tool can be used to run operating system commands to find cpu, memory, disk details
+
+    Args:
+        question (str): the input from user that is passed to local command tool. 
+    Returns:
+        str: A message providing output of the call local tool or an error message.
+
+    """
+
+    question_with_prompt = f"""Provide only the command for this {question} so that it can be executed in a shell. Do not use sudo or prefix with bash. """
+
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+            types.Part.from_text(text=question_with_prompt)
+            ]
+        ),
+    ]
+    tools = []
+    generate_content_config = types.GenerateContentConfig(
+        temperature = 1,
+        top_p = 0.95,
+        max_output_tokens = 8192,
+        response_modalities = ["TEXT"],
+        safety_settings = [types.SafetySetting(
+            category="HARM_CATEGORY_HATE_SPEECH",
+            threshold="OFF"
+        ),types.SafetySetting(
+            category="HARM_CATEGORY_DANGEROUS_CONTENT",
+            threshold="OFF"
+        ),types.SafetySetting(
+            category="HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            threshold="OFF"
+        ),types.SafetySetting(
+            category="HARM_CATEGORY_HARASSMENT",
+            threshold="OFF"
+        )],
+        tools = tools,
+    )
+
+    call_local_llm_output = ""
+    for chunk in client.models.generate_content_stream(
+        model = model,
+        contents = contents,
+        config = generate_content_config,
+        ):
+        if not chunk.candidates or not chunk.candidates[0].content or not chunk.candidates[0].content.parts:
+            continue
+        print(chunk.text, end="")
+        call_local_llm_output = call_local_llm_output + chunk.text
+
+    call_local_llm_output = call_local_llm_output.replace("`","")
+    print("call_local_llm_output:", call_local_llm_output)
+    process = subprocess.Popen(call_local_llm_output, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+
+    if stderr:
+        print(f"Error: {stderr.decode()}")
+    else:
+        call_local_tool_output = stdout.decode()
+
+    tool_context.state["call_local_tool_output"] = call_local_tool_output
+    print("call_local_tool_output:", call_local_tool_output)
+    return call_local_tool_output
+
 def call_web_search(
     question: str,
     tool_context: ToolContext,
 ):
 
-    """Args:
+    """
+    Args:
         question (str): the input from user that calls web search tool. 
         Web search tool can be used to find news, current events any other information that is not provided by other tools.
 
@@ -384,7 +458,7 @@ root_agent = Agent(
     model=os.getenv("GOOGLE_GEMINI_MODEL"),
     description="Agent to answer questions about the historical and current exchange rates, create and run python code, search the web to get information and time and weather in a city. Today is " + now.strftime("%Y-%m-%d %H:%M:%S"),
     instruction="I can answer your questions about the historical and current currency exchange rates, create and run python code, search the web to get information and time and weather in a city and Today is " + now.strftime("%Y-%m-%d %H:%M:%S") + ". Always format the user response in markdown format.",
-    tools=[get_weather, get_current_time, get_exchange_rate, get_historical_exchange_rate, get_exchange_rate_trend, load_artifacts, call_code_agent, call_web_search],
+    tools=[get_weather, get_current_time, get_exchange_rate, get_historical_exchange_rate, get_exchange_rate_trend, load_artifacts, call_code_agent, call_web_search, call_local_tool],
 )
 
 # Instantiate the desired artifact service and session service
