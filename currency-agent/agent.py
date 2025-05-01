@@ -320,7 +320,7 @@ def call_local_tool(
 ):
 
     """"            
-    Local tool can be used to run operating system commands to find cpu, memory, disk details
+    Local tool can be used to run operating system commands to find cpu, memory, disk, network and process details
 
     Args:
         question (str): the input from user that is passed to local command tool. 
@@ -377,6 +377,9 @@ def call_local_tool(
     process = subprocess.Popen(call_local_llm_output, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = process.communicate()
 
+    tool_context.state["call_local_llm_output"] = call_local_llm_output
+
+    call_local_tool_output = ""
     if stderr:
         print(f"Error: {stderr.decode()}")
     else:
