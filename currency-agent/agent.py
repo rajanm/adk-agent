@@ -10,11 +10,18 @@ from google import genai
 import google.genai.types as types
 
 # Import the 'datetime' module to work with date and time
-import datetime
-import os
-import requests
-import pandas as pd
-import subprocess
+import datetime # Still needed for `now`
+import os # Still needed for getenv
+import subprocess # Still needed for call_local_tool
+# requests and pandas are no longer directly used in this file, moved to tools.py
+
+from .tools import (
+    get_weather,
+    get_current_time,
+    get_exchange_rate,
+    get_historical_exchange_rate,
+    get_exchange_rate_trend
+)
 
 from opentelemetry.exporter.cloud_logging import CloudLoggingExporter
 from opentelemetry.exporter.cloud_trace import CloudTraceSpanExporter
@@ -125,154 +132,8 @@ model = os.getenv("GOOGLE_GEMINI_MODEL")
 # Get the current date and time
 now = datetime.datetime.now()
 
-def get_weather(city: str) -> dict:
-    """Retrieves the current weather report for a specified city.
-
-    Returns:
-        dict: A dictionary containing the weather information with a 'status' key ('success' or 'error') and a 'report' key with the weather details if successful, or an 'error_message' if an error occurred.
-    """
-    if city.lower() == "new york":
-        return {"status": "success",
-                "report": "The weather in New York is sunny with a temperature of 25 degrees Celsius (77 degrees Fahrenheit)."}
-    else:
-        return {"status": "error",
-                "error_message": f"Weather information for '{city}' is not available."}
-
-def get_current_time(city: str) -> dict:
-    """Returns the current time in a specified city.
-
-    Returns:
-        dict: A dictionary containing the current time for a specified city information with a 'status' key ('success' or 'error') and a 'report' key with the current time details in a city if successful, or an 'error_message' if an error occurred.
-    """
-    import datetime
-    from zoneinfo import ZoneInfo
-
-    if city.lower() == "new york":
-        tz_identifier = "America/New_York"
-    else:
-        return {"status": "error",
-                "error_message": f"Sorry, I don't have timezone information for {city}."}
-
-    tz = ZoneInfo(tz_identifier)
-    now = datetime.datetime.now(tz)
-    return {"status": "success",
-            "report": f"""The current time in {city} is {now.strftime("%Y-%m-%d %H:%M:%S %Z%z")}"""}
-
-def get_exchange_rate(base_currency: str, target_currency: str) -> float or None:
-    """
-    Retrieves the current exchange rate between two currencies using the exchangerate-api.com free service.
-
-    This function fetches the exchange rate from the exchangerate-api.com API, which does not require an API key.
-    It handles potential API errors and returns None if the exchange rate cannot be retrieved.
-
-    Args:
-        base_currency (str): The currency to convert from (e.g., 'USD').
-        target_currency (str): The currency to convert to (e.g., 'EUR').
-
-    Returns:
-        float or None: The exchange rate as a float if successful, None on failure or if the rate is not found.
-
-    Raises:
-        requests.exceptions.RequestException: if there is an issue with the API request.
-    """
-    base_currency = base_currency.upper()
-    target_currency = target_currency.upper()
-    api_url = f"https://api.exchangerate-api.com/v4/latest/{base_currency}"
-    print(api_url)
-
-    try:
-        response = requests.get(api_url)
-        response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
-        data = response.json()
-
-        if 'rates' in data and target_currency in data['rates']:
-            return float(data['rates'][target_currency])
-        else:
-            return None  # Indicate that the target currency rate was not found
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching exchange rate: {e}") # Log error for debugging
-        return None
-
-def get_historical_exchange_rate(base_currency: str, target_currency: str, date_string: str) -> dict or None:
-    """
-    Retrieves historical exchange rate data for a specific date from the Exchange Rate API.
-
-    Args:
-        api_key (str): Your API key for the Exchange Rate API.
-        base_currency (str): The three-letter ISO 4217 currency code for the base currency.
-        date_string (str): The date for which to retrieve historical data,
-                           in "YYYY-MM-DD" format (e.g., "2024-01-20").
-
-    Returns:
-        dict: A dictionary containing the historical exchange rate data, or None if the request fails
-              or the date string is invalid.
-        None:  Error in the API call or invalid date format.
-
-    Raises:
-        requests.exceptions.RequestException: If there's an error with the requests library itself.
-    """
-    api_key = os.getenv("EXCHANGERATE_API_KEY")  
-    print("api key:" + api_key)
-
-    # --- Parse the date string ---
-    try:
-        date_obj = datetime.datetime.strptime(date_string, '%Y-%m-%d')
-        year = date_obj.year
-        month = date_obj.month
-        day = date_obj.day
-    except ValueError:
-        print(f"Error: Invalid date format. Please use 'YYYY-MM-DD'. Received: {date_string}")
-        return None
-    # --- End of date parsing ---
-
-    # Construct the URL using the parsed year, month, and day.
-    url = f"https://openexchangerates.org/api/historical/{date_string}.json?app_id={api_key}"
-    print(url)
-
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        return data
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-        return None
-    except json.JSONDecodeError as e:
-        print(f"Error decoding JSON response: {e}. Response text was: {response.text}")
-        return None
-
-async def get_exchange_rate_trend(base_currency: str, target_currency: str, start_date: str, end_date: str, tool_context: ToolContext) -> dict:
-    """
-    Get the trend of exchange rates between two currencies for a given date range. 
-
-    Args:
-        base_currency (str): The currency to convert from (e.g., 'USD').
-        target_currency (str): The currency to convert to (e.g., 'EUR').
-        start_date (str): The start date for the trend in 'YYYY-MM-DD' format.
-        end_date (str): The end date for the trend in 'YYYY-MM-DD' format.
-
-    Returns:
-        str: A message providing exchange trend or an error message.
-    """
-    dates = pd.date_range(start=start_date, end=end_date)
-    exchange_rates = []
-
-    for date in dates:
-        date_str = date.strftime('%Y-%m-%d')
-        historical_data = get_historical_exchange_rate(base_currency, target_currency, date_str)
-        if historical_data and 'rates' in historical_data and target_currency in historical_data['rates']:
-            exchange_rates.append(historical_data['rates'][target_currency])
-        else:
-            exchange_rates.append(None)  # Append None if rate is not available for that date
-
-    df = pd.DataFrame({'Date': dates, 'Exchange Rate': exchange_rates})
-    df.dropna(subset=['Exchange Rate'], inplace=True) # Remove rows with None exchange rates
-
-    if df.empty:
-        return "Could not retrieve exchange rate data for the specified date range."
-    else:
-        return f"Exchange rate trend data is \n {df}"
+# Functions get_weather, get_current_time, get_exchange_rate, 
+# get_historical_exchange_rate, get_exchange_rate_trend are now imported from .tools
 
 code_agent = Agent(
     model=os.getenv("GOOGLE_GEMINI_MODEL"),
@@ -318,18 +179,39 @@ def call_local_tool(
     question: str,
     tool_context: ToolContext,
 ):
+    """
+    Local tool to run predefined, safe operating system commands to get system information.
 
-    """"            
-    Local tool can be used to run operating system commands to find cpu, memory, disk, network and process details
+    **Security Warning:** This tool is designed to execute shell commands based on LLM interpretation
+    of user input. It is restricted to a predefined list of safe, informational commands
+    to minimize security risks. Arbitrary command execution is not permitted.
 
     Args:
-        question (str): the input from user that is passed to local command tool. 
+        question (str): The user's question, which will be mapped to an allowed command.
     Returns:
-        str: A message providing output of the call local tool or an error message.
-
+        str: The output of the executed command if successful and allowed, or an error message.
     """
 
-    question_with_prompt = f"""Provide only the command for this {question} so that it can be executed in a shell. Do not use sudo or prefix with bash. """
+    ALLOWED_COMMANDS = {
+        "df -h": "Show disk space usage.",
+        "free -m": "Show memory usage in megabytes.",
+        "uptime": "Show system uptime and load.",
+        "vmstat": "Show virtual memory statistics.",
+        "iostat": "Show CPU and I/O statistics.",
+        "netstat -tulnp": "Show active network connections (TCP/UDP, listening, numeric ports, process IDs). Note: Requires 'net-tools' package.",
+        # "top -bn1": "Show current running processes. Note: Can be resource-intensive." # Example of a command that might be too verbose or resource-intensive
+    }
+
+    allowed_commands_formatted = "\n".join([f"- '{cmd}' (for: {desc})" for cmd, desc in ALLOWED_COMMANDS.items()])
+    question_with_prompt = f"""
+    Given the user's question: '{question}'
+    Select the most appropriate command from the following list to answer the question.
+    Output ONLY the command string itself (e.g., 'df -h').
+    If none of the commands are suitable for answering the question, output 'UNKNOWN'.
+
+    Available commands:
+    {allowed_commands_formatted}
+    """
 
     contents = [
         types.Content(
@@ -372,21 +254,42 @@ def call_local_tool(
         print(chunk.text, end="")
         call_local_llm_output = call_local_llm_output + chunk.text
 
-    call_local_llm_output = call_local_llm_output.replace("`","")
-    print("call_local_llm_output:", call_local_llm_output)
-    process = subprocess.Popen(call_local_llm_output, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
+    call_local_llm_output = call_local_llm_output.replace("`","").strip()
+    print("call_local_llm_output (raw):", call_local_llm_output)
 
-    tool_context.state["call_local_llm_output"] = call_local_llm_output
-
+    tool_context.state["call_local_llm_output_raw"] = call_local_llm_output
     call_local_tool_output = ""
-    if stderr:
-        print(f"Error: {stderr.decode()}")
+
+    if call_local_llm_output in ALLOWED_COMMANDS:
+        command_to_execute = call_local_llm_output
+        command_parts = command_to_execute.split() # Split command for shell=False
+        print(f"Executing allowed command: {command_to_execute}")
+        try:
+            # Using shell=False is safer as it avoids shell injection if command_parts are properly sanitized (which they are, by coming from a fixed list)
+            process = subprocess.Popen(command_parts, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout, stderr = process.communicate()
+
+            if stderr:
+                print(f"Error executing command '{command_to_execute}': {stderr}")
+                call_local_tool_output = f"Error executing command: {stderr}"
+            else:
+                call_local_tool_output = stdout
+                print(f"Command '{command_to_execute}' output: {stdout}")
+
+        except FileNotFoundError:
+            print(f"Error: Command '{command_parts[0]}' not found. Ensure it is installed and in PATH.")
+            call_local_tool_output = f"Error: Command '{command_parts[0]}' not found. It might need to be installed."
+        except Exception as e:
+            print(f"An unexpected error occurred while executing '{command_to_execute}': {e}")
+            call_local_tool_output = f"An unexpected error occurred: {e}"
+    elif call_local_llm_output == "UNKNOWN":
+        print("LLM determined no suitable command.")
+        call_local_tool_output = "Sorry, I could not find a suitable command to answer your question from the allowed list."
     else:
-        call_local_tool_output = stdout.decode()
+        print(f"Command '{call_local_llm_output}' is not in ALLOWED_COMMANDS or is 'UNKNOWN'. Not executing.")
+        call_local_tool_output = "Sorry, I can only execute a predefined set of informational commands, and your request did not map to one of them or the command was not recognized."
 
     tool_context.state["call_local_tool_output"] = call_local_tool_output
-    print("call_local_tool_output:", call_local_tool_output)
     return call_local_tool_output
 
 def call_web_search(
@@ -461,7 +364,17 @@ root_agent = Agent(
     model=os.getenv("GOOGLE_GEMINI_MODEL"),
     description="Agent to answer questions about the historical and current exchange rates, create and run python code, search the web to get information and time and weather in a city. Today is " + now.strftime("%Y-%m-%d %H:%M:%S"),
     instruction="I can answer your questions about the historical and current currency exchange rates, create and run python code, search the web to get information and time and weather in a city and Today is " + now.strftime("%Y-%m-%d %H:%M:%S") + ". Always format the user response in markdown format.",
-    tools=[get_weather, get_current_time, get_exchange_rate, get_historical_exchange_rate, get_exchange_rate_trend, load_artifacts, call_code_agent, call_web_search, call_local_tool],
+    tools=[
+        get_weather, 
+        get_current_time, 
+        get_exchange_rate, 
+        get_historical_exchange_rate, 
+        get_exchange_rate_trend,
+        load_artifacts, 
+        call_code_agent, 
+        call_web_search, 
+        call_local_tool
+    ],
 )
 
 # Instantiate the desired artifact service and session service
